@@ -348,17 +348,83 @@
         border-radius:18px;padding:10px;margin-bottom:10px;box-shadow:0 4px 0 var(--sun-dark);flex:0 0 auto;font-size:1.1rem;
       }
 
-      /* ---------- emergency quests / sync ---------- */
-      .quest-area{background:#FFF3D6;border:3px solid var(--sun);border-radius:16px;padding:8px 10px;margin-bottom:10px;flex:0 0 auto;}
-      @media (prefers-color-scheme: dark){.quest-area{background:#3D3319;}}
-      .quest-area-head{font-weight:800;font-size:.95rem;margin-bottom:2px;}
-      .quest-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:2px dashed rgba(61,50,41,.18);}
+      /* ---------- emergency quests / sync : ALERT styling (deliberately unlike normal learning UI) ---------- */
+      .quest-area{
+        background:linear-gradient(135deg,#FF3B30 0%,#FF6B1A 55%,#FF8A00 100%);
+        border:4px solid #C81E1E;border-radius:16px;padding:8px 10px;margin-bottom:10px;flex:0 0 auto;
+        box-shadow:0 0 0 3px #FFD60A,0 6px 18px rgba(200,30,30,.45);
+        color:#fff;
+        animation:questPulse 1.6s ease-in-out infinite;
+      }
+      @keyframes questPulse{
+        0%,100%{box-shadow:0 0 0 3px #FFD60A,0 6px 18px rgba(200,30,30,.45);}
+        50%{box-shadow:0 0 0 6px #FFE45C,0 6px 26px rgba(255,107,26,.75);}
+      }
+      @media (prefers-reduced-motion: reduce){.quest-area{animation:none;}}
+      @media (prefers-color-scheme: dark){.quest-area{border-color:#FF6B5E;box-shadow:0 0 0 3px #FFD60A,0 6px 18px rgba(0,0,0,.6);}}
+      .quest-area-head{display:flex;align-items:center;gap:8px;font-weight:800;font-size:1.05rem;margin-bottom:2px;color:#fff;letter-spacing:.02em;}
+      .quest-alert-badge{
+        display:inline-flex;align-items:center;gap:3px;background:#fff;color:#C81E1E;
+        font-weight:800;font-size:.78rem;border-radius:999px;padding:2px 9px;white-space:nowrap;
+        box-shadow:0 2px 0 rgba(0,0,0,.25);
+      }
+      .quest-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:2px dashed rgba(255,255,255,.55);}
       .quest-row-main{flex:1;min-width:0;}
-      .quest-row-title{font-weight:800;font-size:1rem;line-height:1.3;}
-      .quest-row-sub{font-weight:700;font-size:.82rem;color:var(--ink-soft);line-height:1.35;}
-      .quest-done-btn{background:var(--teal);color:#fff;font-weight:800;border-radius:999px;padding:8px 14px;font-size:.95rem;box-shadow:0 3px 0 var(--teal-dark);white-space:nowrap;}
-      .quest-done-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--teal-dark);}
+      .quest-row-title{font-weight:800;font-size:1rem;line-height:1.3;color:#fff;}
+      .quest-row-sub{font-weight:800;font-size:.84rem;color:#FFF3C4;line-height:1.35;}
+      .quest-row-sub .quest-points{color:#fff;}
+      .quest-done-btn{background:#fff;color:#C81E1E;font-weight:800;border-radius:999px;padding:9px 16px;font-size:1rem;box-shadow:0 3px 0 rgba(0,0,0,.35);white-space:nowrap;border:3px solid #C81E1E;}
+      .quest-done-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35);}
       .sync-status{font-weight:700;color:var(--ink-soft);font-size:.88rem;margin-top:6px;}
+      /* quest alert popups */
+      .quest-modal-box{padding:0;overflow:hidden;border:4px solid #C81E1E;text-align:center;}
+      .quest-modal-head{
+        background:linear-gradient(135deg,#FF3B30,#FF6B1A);color:#fff;font-weight:800;
+        font-size:1.35rem;letter-spacing:.03em;padding:12px 14px 10px;line-height:1.25;
+      }
+      .quest-modal-head .quest-alert-badge{vertical-align:2px;margin-right:6px;}
+      .quest-modal-body{padding:12px 20px 20px;}
+      .quest-modal-body .modal-mascot{width:clamp(84px,15dvh,112px);height:clamp(84px,15dvh,112px);}
+      .quest-modal-body .modal-title{color:#C81E1E;}
+      .quest-modal-ok{background:#E2481A !important;color:#fff !important;box-shadow:0 4px 0 #9E2B0E;}
+      .quest-modal-ok:active{transform:translateY(2px);box-shadow:0 1px 0 #9E2B0E;}
+      .celebration-modal-box{border-color:#E8A90C;}
+      .celebration-modal-box .quest-modal-head{background:linear-gradient(135deg,#FF8A00,#FFC53D);color:#5A2E00;}
+      .celebration-modal-box .quest-modal-body .modal-title{color:#B45309;}
+      @media (prefers-color-scheme: dark){
+        .quest-modal-box{border-color:#FF6B5E;}
+        .quest-modal-body .modal-title{color:#FF9D8A;}
+        .celebration-modal-box .quest-modal-body .modal-title{color:#FFC53D;}
+      }
+      /* quest history screen */
+      .qh-list{display:flex;flex-direction:column;gap:8px;}
+      .qh-item{background:var(--card);border:3px solid var(--line);border-radius:14px;padding:9px 11px;box-shadow:var(--shadow);}
+      .qh-item-top{display:flex;align-items:flex-start;gap:8px;}
+      .qh-title{flex:1;min-width:0;font-weight:800;font-size:.98rem;line-height:1.35;}
+      .qh-points{font-weight:800;color:var(--coral-dark);white-space:nowrap;font-size:.95rem;}
+      .qh-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px;}
+      .qh-date{font-weight:700;font-size:.78rem;color:var(--ink-soft);}
+      .qh-status{font-weight:800;font-size:.78rem;border-radius:999px;padding:2px 9px;white-space:nowrap;}
+      .qh-status-active{background:#FFE1D6;color:#9E2B0E;border:2px solid #FF6B1A;}
+      .qh-status-reported{background:#FFF3D6;color:#7A5200;border:2px solid var(--sun-dark);}
+      .qh-status-approved{background:#D9F2E3;color:#14632F;border:2px solid var(--good);}
+      .qh-status-done{background:#159A8C;color:#fff;border:2px solid var(--teal-dark);}
+      .qh-status-cancelled{background:var(--paper);color:var(--ink-soft);border:2px solid var(--line);}
+      .qh-empty{text-align:center;font-weight:800;color:var(--ink-soft);line-height:1.7;padding:22px 10px;}
+      @media (max-height:620px){
+        .quest-modal-head{font-size:1.12rem;padding:8px 10px 7px;}
+        .quest-modal-body{padding:8px 14px 12px;}
+        .quest-modal-body .modal-mascot{width:64px;height:64px;}
+        .quest-modal-body .modal-title{font-size:1.12rem;margin:3px 0;}
+        .quest-modal-body .modal-text{margin-bottom:10px;font-size:.92rem;}
+        .quest-modal-body .modal-btns button{padding:10px;}
+        .quest-area{padding:6px 8px;margin-bottom:8px;}
+        .quest-area-head{font-size:.95rem;}
+        .quest-row{padding:4px 0;}
+        .quest-row-title{font-size:.92rem;}
+        .quest-row-sub{font-size:.78rem;}
+        .quest-done-btn{padding:6px 12px;font-size:.92rem;}
+      }
 
       /* ---------- modal ---------- */
       .modal-back{
@@ -540,14 +606,15 @@
           <button class="kebab-btn" id="adult-menu-btn" type="button" aria-label="おとな用メニュー" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="adult-menu" id="adult-menu" hidden>
             <button class="adult-menu-item" type="button" data-goto="scr-rewards"><span class="am-star">★</span>ごほうび</button>
+            <button class="adult-menu-item" type="button" data-goto="scr-quest-history">緊急クエストの きろく</button>
             <button class="adult-menu-item" type="button" data-goto="scr-parent">保護者メニュー</button>
           </div>
         </div>
 
         <div class="cap-note" id="home-cap-note" style="display:none;"></div>
 
-        <div class="quest-area" id="quest-home-area" style="display:none;">
-          <div class="quest-area-head">緊急クエスト</div>
+        <div class="quest-area quest-alert-area" id="quest-home-area" style="display:none;" role="alert">
+          <div class="quest-area-head"><span class="quest-alert-badge">⚠ 緊急</span>緊急クエスト！</div>
           <div id="quest-chip-list"></div>
         </div>
 
@@ -782,6 +849,16 @@
         </div>
       </section>
 
+      <!-- ============ QUEST HISTORY ============ -->
+      <section class="screen" id="scr-quest-history">
+        <button class="back-btn" data-goto="scr-home">← もどる</button>
+        <h2 class="page-title">緊急クエストの きろく</h2>
+        <p class="page-lead">いままでの 緊急クエストが 見られるよ。新しいものが 上に あるよ。</p>
+        <div class="scroll-pane">
+          <div class="qh-list" id="quest-history-list"></div>
+        </div>
+      </section>
+
       <!-- ============ PARENT ============ -->
       <section class="screen" id="scr-parent">
         <button class="back-btn" data-goto="scr-home">← もどる</button>
@@ -868,26 +945,32 @@
         </div>
       </div>
     </div>
-    <!-- emergency quest popup -->
+    <!-- emergency quest popup (ALERT design) -->
     <div class="modal-back" id="quest-back">
-      <div class="modal-box">
-        <img class="modal-mascot" id="quest-mascot" alt="" />
-        <div class="modal-title">緊急クエスト！</div>
-        <p class="modal-text"><span id="quest-popup-title"></span><br /><span id="quest-popup-points"></span></p>
-        <div class="modal-btns">
-          <button class="modal-cancel" id="quest-later">あとで</button>
-          <button class="modal-ok" id="quest-do">やる！</button>
+      <div class="modal-box quest-modal-box quest-alert-box">
+        <div class="quest-modal-head"><span class="quest-alert-badge">⚠ 緊急</span>緊急クエスト！</div>
+        <div class="quest-modal-body">
+          <img class="modal-mascot" id="quest-mascot" alt="" />
+          <div class="modal-title" id="quest-popup-title"></div>
+          <p class="modal-text"><span id="quest-popup-points"></span></p>
+          <div class="modal-btns">
+            <button class="modal-cancel" id="quest-later">あとで</button>
+            <button class="modal-ok quest-modal-ok" id="quest-do">やる！</button>
+          </div>
         </div>
       </div>
     </div>
-    <!-- emergency quest celebration popup -->
+    <!-- emergency quest celebration popup (keeps quest identity, celebratory tone) -->
     <div class="modal-back" id="celebration-back">
-      <div class="modal-box">
-        <img class="modal-mascot" id="celebration-mascot" alt="" />
-        <div class="modal-title">緊急クエスト クリア！</div>
-        <p class="modal-text" id="celebration-text"></p>
-        <div class="modal-btns">
-          <button class="modal-ok" id="celebration-ok">やったー</button>
+      <div class="modal-box quest-modal-box celebration-modal-box">
+        <div class="quest-modal-head"><span class="quest-alert-badge">★ クリア</span>緊急クエスト クリア！</div>
+        <div class="quest-modal-body">
+          <img class="modal-mascot" id="celebration-mascot" alt="" />
+          <div class="modal-title">やったね！</div>
+          <p class="modal-text" id="celebration-text"></p>
+          <div class="modal-btns">
+            <button class="modal-ok quest-modal-ok" id="celebration-ok">やったー</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1080,6 +1163,7 @@
       window.scrollTo(0, 0);
       if (id === "scr-home") { renderHome(); maybeShowQuestPopups(); }
       if (id === "scr-rewards") renderRewards();
+      if (id === "scr-quest-history") { try { renderQuestHistory(); } catch (e) {} }
       if (id === "scr-parent") renderParent();
       refreshQuestionCountLabels();
       if (id === "scr-kuku-setup") { renderDanMap($("setup-danmap")); $("kuku-review-sub").textContent = reviewCount() > 0 ? ("まちがえた もんだいが " + reviewCount() + "こ あるよ") : "まちがえた もんだいは まだ ないよ"; }
@@ -2601,7 +2685,7 @@
     var SYNC_INTERVAL_MS = 3 * 60 * 1000;
 
     function defaultSyncState() {
-      return { lastSyncAt: 0, pendingProgress: false, pendingReports: [], claimedQuestIds: [], seenActiveQuestIds: [] };
+      return { lastSyncAt: 0, pendingProgress: false, pendingReports: [], claimedQuestIds: [], seenActiveQuestIds: [], questHistory: {} };
     }
     var SYNC;
     try {
@@ -2611,6 +2695,7 @@
       if (!Array.isArray(SYNC.claimedQuestIds)) SYNC.claimedQuestIds = [];
       if (!Array.isArray(SYNC.seenActiveQuestIds)) SYNC.seenActiveQuestIds = [];
       if (typeof SYNC.lastSyncAt !== "number") SYNC.lastSyncAt = 0;
+      if (!SYNC.questHistory || typeof SYNC.questHistory !== "object" || Array.isArray(SYNC.questHistory)) SYNC.questHistory = {};
     } catch (e) { SYNC = defaultSyncState(); }
     function saveSync() {
       try { localStorage.setItem(SYNC_KEY, JSON.stringify(SYNC)); } catch (e) {}
@@ -2753,6 +2838,96 @@
       if (q && q.status === "active" && SYNC.pendingReports.indexOf(q.id) >= 0) return "reported";
       return q ? q.status : "";
     }
+    /* ---- quest history (local, stored inside SYNC / kanon_quest_sync_v1) ---- */
+    function questHistoryEnsure() {
+      if (!SYNC.questHistory || typeof SYNC.questHistory !== "object" || Array.isArray(SYNC.questHistory)) SYNC.questHistory = {};
+      return SYNC.questHistory;
+    }
+    function questHistoryUpsert(id, title, points, status) {
+      id = String(id);
+      var h = questHistoryEnsure();
+      var now = Date.now();
+      var prev = h[id];
+      var entry = {
+        id: id,
+        title: title != null && String(title) !== "" ? String(title) : (prev ? prev.title : ""),
+        points: (points != null && isFinite(Number(points))) ? Number(points) : (prev ? Number(prev.points) || 0 : 0),
+        status: status || (prev ? prev.status : "active"),
+        firstSeenAt: prev && typeof prev.firstSeenAt === "number" ? prev.firstSeenAt : now,
+        updatedAt: now
+      };
+      /* done / cancelled は終端：サーバー側の古い状態で巻き戻さない */
+      if (prev && (prev.status === "done") && entry.status !== "done") entry.status = "done";
+      h[id] = entry;
+      return entry;
+    }
+    function questHistoryMarkDone(id, title, points) {
+      var entry = questHistoryUpsert(id, title, points, "done");
+      entry.status = "done";
+      entry.updatedAt = Date.now();
+      saveSync();
+    }
+    function questHistorySyncFromFetch(serverList) {
+      var h = questHistoryEnsure();
+      var seen = {};
+      (serverList || []).forEach(function (q) {
+        if (!q || q.id == null) return;
+        var id = String(q.id);
+        seen[id] = true;
+        var eff = questEffectiveStatus(q);
+        var prev = h[id];
+        var status = eff || String(q.status || "active");
+        if (SYNC.claimedQuestIds.indexOf(id) >= 0) status = "done";
+        else if (prev && prev.status === "done") status = "done";
+        questHistoryUpsert(id, q.title, q.points, status);
+      });
+      /* 以前 active/reported/approved で見ていたのに今回の取得から消えたもの → 取り消し（claim済みは done のまま） */
+      Object.keys(h).forEach(function (id) {
+        if (seen[id]) return;
+        var e = h[id];
+        if (!e) return;
+        if (SYNC.claimedQuestIds.indexOf(id) >= 0 || e.status === "done") {
+          if (e.status !== "done") { e.status = "done"; e.updatedAt = Date.now(); }
+          return;
+        }
+        if (e.status === "active" || e.status === "reported" || e.status === "approved") {
+          e.status = "cancelled";
+          e.updatedAt = Date.now();
+        }
+      });
+      saveSync();
+    }
+    var QUEST_HISTORY_LABELS = {
+      active: { text: "出題中", cls: "qh-status-active" },
+      reported: { text: "カーチャンかトーチャンの確認待ち", cls: "qh-status-reported" },
+      approved: { text: "承認されたよ", cls: "qh-status-approved" },
+      done: { text: "クリア！", cls: "qh-status-done" },
+      cancelled: { text: "取り消し", cls: "qh-status-cancelled" }
+    };
+    function renderQuestHistory() {
+      var list = $("quest-history-list");
+      if (!list) return;
+      var h = questHistoryEnsure();
+      var entries = Object.keys(h).map(function (k) { return h[k]; }).filter(function (e) { return e && e.id != null; });
+      entries.sort(function (a, b) {
+        var tb = (typeof b.updatedAt === "number" ? b.updatedAt : 0) - (typeof a.updatedAt === "number" ? a.updatedAt : 0);
+        if (tb !== 0) return tb;
+        return (typeof b.firstSeenAt === "number" ? b.firstSeenAt : 0) - (typeof a.firstSeenAt === "number" ? a.firstSeenAt : 0);
+      });
+      if (!entries.length) {
+        list.innerHTML = '<div class="qh-empty">まだ 緊急クエストは ないよ。<br />カーチャンかトーチャンから クエストが とどいたら、ここに でるよ。</div>';
+        return;
+      }
+      list.innerHTML = entries.map(function (e) {
+        var lab = QUEST_HISTORY_LABELS[e.status] || QUEST_HISTORY_LABELS.active;
+        var dateStr = "";
+        try { dateStr = fmtDate(typeof e.updatedAt === "number" ? e.updatedAt : (typeof e.firstSeenAt === "number" ? e.firstSeenAt : Date.now())); } catch (err) { dateStr = ""; }
+        return '<div class="qh-item"><div class="qh-item-top"><div class="qh-title">' + esc(e.title || "") + '</div>' +
+          '<div class="qh-points">' + (Number(e.points) || 0) + ' P</div></div>' +
+          '<div class="qh-meta"><span class="qh-status ' + lab.cls + '">' + esc(lab.text) + '</span>' +
+          (dateStr ? '<span class="qh-date">' + esc(dateStr) + '</span>' : "") + '</div></div>';
+      }).join("");
+    }
     function renderQuestChip() {
       var area = $("quest-home-area"), list = $("quest-chip-list");
       if (!area || !list) return;
@@ -2769,11 +2944,11 @@
       list.innerHTML = visible.map(function (q) {
         var st = questEffectiveStatus(q);
         if (st === "reported") {
-          return '<div class="quest-row"><div class="quest-row-main"><div class="quest-row-title">' + esc(q.title) + '</div>' +
-            '<div class="quest-row-sub">ほうこく済み・お母さんの確認待ち</div></div></div>';
+          return '<div class="quest-row quest-row-reported"><div class="quest-row-main"><div class="quest-row-title">' + esc(q.title) + '</div>' +
+            '<div class="quest-row-sub">ほうこく済み・カーチャンかトーチャンの確認待ち</div></div></div>';
         }
         return '<div class="quest-row" data-quest-open="' + esc(q.id) + '"><div class="quest-row-main"><div class="quest-row-title">' + esc(q.title) + '</div>' +
-          '<div class="quest-row-sub">' + (Number(q.points) || 0) + ' P</div></div>' +
+          '<div class="quest-row-sub"><span class="quest-points">' + (Number(q.points) || 0) + ' P</span> の ごほうび！</div></div>' +
           '<button type="button" class="quest-done-btn" data-quest-report="' + esc(q.id) + '">できた！</button></div>';
       }).join("");
     }
@@ -2799,6 +2974,7 @@
         grantQuestPoints(pts);
         SYNC.claimedQuestIds.push(id);
         saveSync();
+        try { questHistoryMarkDone(id, data.title || q.title || "", pts); } catch (eH) {}
         celebrationQueue.push({ id: id, title: data.title || q.title || "", points: pts });
         renderHome();
         sendProgress();
@@ -2809,6 +2985,7 @@
       questsCache = (serverQuests || []).filter(function (q) { return q && q.id != null; }).map(function (q) {
         return { id: String(q.id), title: String(q.title || ""), points: Number(q.points) || 0, status: String(q.status || "") };
       });
+      try { questHistorySyncFromFetch(questsCache); } catch (eH) {}
       /* pendingReports の掃除：サーバーが reported/approved を返したもの・一覧から消えたものは解除（サーバー状態が正） */
       var before = SYNC.pendingReports.length;
       SYNC.pendingReports = SYNC.pendingReports.filter(function (id) {
@@ -2842,6 +3019,7 @@
           if (ix >= 0) { SYNC.pendingReports.splice(ix, 1); saveSync(); }
           var q = findQuest(id);
           if (q && q.status === "active") q.status = "reported";
+          try { if (q) { questHistoryUpsert(id, q.title, q.points, "reported"); saveSync(); } } catch (eH) {}
           renderQuestChip();
           return true;
         }
@@ -2854,6 +3032,7 @@
         SYNC.pendingReports.push(id);
         saveSync();
       }
+      try { var qr = findQuest(id); if (qr) { questHistoryUpsert(id, qr.title, qr.points, "reported"); saveSync(); } } catch (eH) {}
       renderQuestChip();   /* 楽観表示：チップはすぐ報告済みになる */
       if (questPopupId === id) closeQuestPopup();
       postReport(id);
