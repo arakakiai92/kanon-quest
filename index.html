@@ -412,6 +412,7 @@
       .qh-status-approved{background:#D9F2E3;color:#14632F;border:2px solid var(--good);}
       .qh-status-done{background:#159A8C;color:#fff;border:2px solid var(--teal-dark);}
       .qh-status-cancelled{background:var(--paper);color:var(--ink-soft);border:2px solid var(--line);}
+      .qh-status-sibling{background:#E8E4F7;color:#4A3D8F;border:2px solid #8B7FD4;}
       .qh-empty{text-align:center;font-weight:800;color:var(--ink-soft);line-height:1.7;padding:22px 10px;}
       @media (max-height:620px){
         .quest-modal-head{font-size:1.12rem;padding:8px 10px 7px;}
@@ -1092,6 +1093,23 @@
       if (cap !== null && S.points > cap) { S.points = cap; return true; }
       return false;
     }
+    /* ポイント増減の共通処理：保護者メニューの「ポイント調整」と
+       ダッシュボード起点の調整予約でまったく同じセマンティクスにする。
+       プラスは累計に満額・残高は上限で頭打ち、マイナスは残高・累計とも0でフロア。
+       レベルは totalEarned から levelOf() で都度計算されるので自動で合い直される。 */
+    function applyPointDelta(delta) {
+      var d = Number(delta) || 0;
+      if (d > 0) {
+        var cap = pointsCap();
+        S.totalEarned += d;
+        S.points = cap !== null ? Math.min(S.points + d, cap) : (S.points + d);
+      } else if (d < 0) {
+        var amt = -d;
+        S.points = Math.max(0, S.points - amt);
+        S.totalEarned = Math.max(0, S.totalEarned - amt);
+      }
+      save();
+    }
     function parseRewardCost(raw) {
       var s = String(raw == null ? "" : raw).trim();
       if (!/^[0-9]+$/.test(s)) return NaN;
@@ -1497,15 +1515,14 @@
         msg.className = "feedback bad";
         return;
       }
-      if (sign > 0) {
-        var cap = pointsCap();
-        S.totalEarned += amt;
-        S.points = cap !== null ? Math.min(S.points + amt, cap) : (S.points + amt);
-      } else {
-        S.points = Math.max(0, S.points - amt);
-        S.totalEarned = Math.max(0, S.totalEarned - amt);
-      }
-      save();
+      applyPointDelta(sign * amt);
+      /* 次の進捗同期に adjusted:true を付ける（中継所の空上書きガード対策：
+         累計0でも意図的な調整だと伝える）。フラグは SYNC 側に保持し、
+         同期が成功した時点で sendProgress() が下ろす。 */
+      try {
+        SYNC.pendingAdjustedSync = true;
+        saveSync();
+      } catch (eA) {}
       renderParent(); renderHome();
       try { sendProgress(); } catch (e) {}
       $("padjust-amount").value = "";
@@ -2749,7 +2766,7 @@
     var SYNC_INTERVAL_MS = 3 * 60 * 1000;
 
     function defaultSyncState() {
-      return { lastSyncAt: 0, pendingProgress: false, pendingReports: [], claimedQuestIds: [], seenActiveQuestIds: [], questHistory: {} };
+      return { lastSyncAt: 0, pendingProgress: false, pendingReports: [], claimedQuestIds: [], seenActiveQuestIds: [], questHistory: {}, appliedAdjustmentIds: [], pendingAdjustmentAcks: [], pendingAdjustedSync: false, lastAdjustmentNote: "" };
     }
     var SYNC;
     try {
@@ -2760,6 +2777,14 @@
       if (!Array.isArray(SYNC.seenActiveQuestIds)) SYNC.seenActiveQuestIds = [];
       if (typeof SYNC.lastSyncAt !== "number") SYNC.lastSyncAt = 0;
       if (!SYNC.questHistory || typeof SYNC.questHistory !== "object" || Array.isArray(SYNC.questHistory)) SYNC.questHistory = {};
+      /* ダッシュボード起点のポイント調整（予約式）用。旧セーブには無いキーなので
+         ここで補完する（kanon_quest_v1 本体の形式は変更しない）。 */
+      if (!Array.isArray(SYNC.appliedAdjustmentIds)) SYNC.appliedAdjustmentIds = [];
+      SYNC.appliedAdjustmentIds = SYNC.appliedAdjustmentIds.map(function (x) { return String(x); });
+      if (!Array.isArray(SYNC.pendingAdjustmentAcks)) SYNC.pendingAdjustmentAcks = [];
+      SYNC.pendingAdjustmentAcks = SYNC.pendingAdjustmentAcks.map(function (x) { return String(x); });
+      if (typeof SYNC.pendingAdjustedSync !== "boolean") SYNC.pendingAdjustedSync = !!SYNC.pendingAdjustedSync;
+      if (typeof SYNC.lastAdjustmentNote !== "string") SYNC.lastAdjustmentNote = "";
     } catch (e) { SYNC = defaultSyncState(); }
     function saveSync() {
       try { localStorage.setItem(SYNC_KEY, JSON.stringify(SYNC)); } catch (e) {}
@@ -2771,9 +2796,13 @@
     var questPopupId = null;
     var celebrationOpen = false;
     var questsFetchInFlight = false;
+    var adjustmentsFetchInFlight = false;
+    var adjustAckInFlight = {};
 
     function syncStatusText() {
-      return SYNC.lastSyncAt ? ("同期：" + fmtDate(SYNC.lastSyncAt)) : "同期：まだ";
+      var base = SYNC.lastSyncAt ? ("同期：" + fmtDate(SYNC.lastSyncAt)) : "同期：まだ";
+      if (SYNC.lastAdjustmentNote) base += "（ポイント調整 " + SYNC.lastAdjustmentNote + " を適用済み）";
+      return base;
     }
     function updateSyncStatusLine() {
       var el = $("parent-sync-status");
@@ -2872,10 +2901,17 @@
     function sendProgress() {
       try {
         var snapshot = buildSnapshot();
+        /* 調整（ダッシュボード予約／保護者メニュー）を適用した直後の最初の同期だけ
+           adjusted:true を付ける。中継所の空上書きガード（累計0の同期を無視）に
+           「意図的な変更」だと伝えるため。成功した同期でフラグを下ろし、
+           失敗したら次の同期でも付け直す。 */
+        var hadAdjusted = !!SYNC.pendingAdjustedSync;
+        if (hadAdjusted) snapshot.adjusted = true;
         return relayPost({ token: TOKEN, action: "progress", child: CHILD, snapshot: snapshot }).then(function (data) {
           if (data && data.ok === true) {
             SYNC.lastSyncAt = Date.now();
             SYNC.pendingProgress = false;
+            if (hadAdjusted) SYNC.pendingAdjustedSync = false;
             saveSync();
             updateSyncStatusLine();
           } else {
@@ -2907,7 +2943,7 @@
       if (!SYNC.questHistory || typeof SYNC.questHistory !== "object" || Array.isArray(SYNC.questHistory)) SYNC.questHistory = {};
       return SYNC.questHistory;
     }
-    function questHistoryUpsert(id, title, points, status) {
+    function questHistoryUpsert(id, title, points, status, both) {
       id = String(id);
       var h = questHistoryEnsure();
       var now = Date.now();
@@ -2917,11 +2953,14 @@
         title: title != null && String(title) !== "" ? String(title) : (prev ? prev.title : ""),
         points: (points != null && isFinite(Number(points))) ? Number(points) : (prev ? Number(prev.points) || 0 : 0),
         status: status || (prev ? prev.status : "active"),
+        /* 'both' クエストかどうか。未指定なら前回の値を引き継ぐ（旧エントリは false 扱い） */
+        both: (typeof both === "boolean") ? both : !!(prev && prev.both),
         firstSeenAt: prev && typeof prev.firstSeenAt === "number" ? prev.firstSeenAt : now,
         updatedAt: now
       };
-      /* done / cancelled は終端：サーバー側の古い状態で巻き戻さない */
+      /* done / sibling は終端：サーバー側の古い状態で巻き戻さない */
       if (prev && (prev.status === "done") && entry.status !== "done") entry.status = "done";
+      if (prev && (prev.status === "sibling") && entry.status !== "sibling") entry.status = "sibling";
       h[id] = entry;
       return entry;
     }
@@ -2943,9 +2982,11 @@
         var status = eff || String(q.status || "active");
         if (SYNC.claimedQuestIds.indexOf(id) >= 0) status = "done";
         else if (prev && prev.status === "done") status = "done";
-        questHistoryUpsert(id, q.title, q.points, status);
+        questHistoryUpsert(id, q.title, q.points, status, q.child === "both");
       });
-      /* 以前 active/reported/approved で見ていたのに今回の取得から消えたもの → 取り消し（claim済みは done のまま） */
+      /* 以前 active/reported/approved で見ていたのに今回の取得から消えたもの → 原則 取り消し（claim済みは done のまま）。
+         ただし 'both' クエストを自分が報告しないまま消えた場合は、きょうだいが先に完了したものとして sibling にする。
+         自分が報告済み（reported/approved）で消えた場合は親の取り消しなので cancelled のまま。 */
       Object.keys(h).forEach(function (id) {
         if (seen[id]) return;
         var e = h[id];
@@ -2955,7 +2996,7 @@
           return;
         }
         if (e.status === "active" || e.status === "reported" || e.status === "approved") {
-          e.status = "cancelled";
+          e.status = (e.status === "active" && e.both) ? "sibling" : "cancelled";
           e.updatedAt = Date.now();
         }
       });
@@ -2966,7 +3007,8 @@
       reported: { text: "カーチャンかトーチャンの確認待ち", cls: "qh-status-reported" },
       approved: { text: "承認されたよ", cls: "qh-status-approved" },
       done: { text: "クリア！", cls: "qh-status-done" },
-      cancelled: { text: "取り消し", cls: "qh-status-cancelled" }
+      cancelled: { text: "取り消し", cls: "qh-status-cancelled" },
+      sibling: { text: "きょうだいが先にやったよ", cls: "qh-status-sibling" }
     };
     function renderQuestHistory() {
       var list = $("quest-history-list");
@@ -3047,7 +3089,7 @@
     }
     function reconcileQuests(serverQuests) {
       questsCache = (serverQuests || []).filter(function (q) { return q && q.id != null; }).map(function (q) {
-        return { id: String(q.id), title: String(q.title || ""), points: Number(q.points) || 0, status: String(q.status || "") };
+        return { id: String(q.id), title: String(q.title || ""), points: Number(q.points) || 0, status: String(q.status || ""), child: String(q.child || "") };
       });
       try { questHistorySyncFromFetch(questsCache); } catch (eH) {}
       /* pendingReports の掃除：サーバーが reported/approved を返したもの・一覧から消えたものは解除（サーバー状態が正） */
@@ -3075,9 +3117,110 @@
         return true;
       });
     }
+
+    /* ---- ダッシュボード起点のポイント調整（予約式） ----
+       クエストと同じ取得サイクルで pending の調整を取り込む。子ども向けUIは無し（静かに適用）。
+       二重適用防止：適用した id は SYNC.appliedAdjustmentIds に先に記録してから確認POSTを送る。
+       確認POSTが失敗しても id は記録済みなので再適用はされず、pendingAdjustmentAcks に残った
+       確認POSTだけを後のサイクルで再試行する。 */
+    function postAdjustmentApplied(id) {
+      id = String(id);
+      if (adjustAckInFlight[id]) return Promise.resolve(false);
+      adjustAckInFlight[id] = true;
+      return relayPost({ token: TOKEN, action: "adjust_applied", id: id }).then(function (data) {
+        delete adjustAckInFlight[id];
+        if (data && data.ok === true) {
+          var ix = SYNC.pendingAdjustmentAcks.indexOf(id);
+          if (ix >= 0) { SYNC.pendingAdjustmentAcks.splice(ix, 1); saveSync(); }
+          return true;
+        }
+        if (SYNC.pendingAdjustmentAcks.indexOf(id) < 0) {
+          SYNC.pendingAdjustmentAcks.push(id);
+          saveSync();
+        }
+        return false;
+      });
+    }
+    function retryPendingAdjustmentAcks() {
+      if (!Array.isArray(SYNC.pendingAdjustmentAcks)) SYNC.pendingAdjustmentAcks = [];
+      SYNC.pendingAdjustmentAcks.slice().forEach(function (id) { postAdjustmentApplied(id); });
+    }
+    function fetchAdjustments() {
+      if (adjustmentsFetchInFlight) return Promise.resolve(false);
+      adjustmentsFetchInFlight = true;
+      return relayGet({ token: TOKEN, action: "adjustments_for", child: CHILD }).then(function (data) {
+        adjustmentsFetchInFlight = false;
+        if (!data || data.ok !== true || !Array.isArray(data.adjustments)) {
+          /* 取得自体が失敗（オフライン等）でも、未確認の確認POSTだけは再試行を試みる */
+          try { retryPendingAdjustmentAcks(); } catch (eR) {}
+          return false;
+        }
+        if (!Array.isArray(SYNC.appliedAdjustmentIds)) SYNC.appliedAdjustmentIds = [];
+        if (!Array.isArray(SYNC.pendingAdjustmentAcks)) SYNC.pendingAdjustmentAcks = [];
+        var returnedIds = {};
+        data.adjustments.forEach(function (adj) {
+          if (adj && adj.id != null) returnedIds[String(adj.id)] = true;
+        });
+        /* サーバーがもう pending として返さない未確認 id は、サーバー側で適用済みに
+           なったものとして確認待ちから外す（応答ロスト時の掃除）。 */
+        var cleanedAck = false;
+        SYNC.pendingAdjustmentAcks.slice().forEach(function (id) {
+          if (!returnedIds[id] && !adjustAckInFlight[id]) {
+            var ix = SYNC.pendingAdjustmentAcks.indexOf(id);
+            if (ix >= 0) { SYNC.pendingAdjustmentAcks.splice(ix, 1); cleanedAck = true; }
+          }
+        });
+        if (cleanedAck) saveSync();
+        var newlyApplied = 0;
+        var batchDelta = 0;
+        data.adjustments.forEach(function (adj) {
+          if (!adj || adj.id == null) return;
+          var id = String(adj.id);
+          if (SYNC.appliedAdjustmentIds.indexOf(id) >= 0) {
+            /* 適用済み：二度目は適用しない。確認POSTだけ再試行する
+               （前回の確認が失敗してサーバーではまだ pending のケース）。 */
+            if (SYNC.pendingAdjustmentAcks.indexOf(id) >= 0 || !adjustAckInFlight[id]) {
+              if (SYNC.pendingAdjustmentAcks.indexOf(id) < 0) {
+                SYNC.pendingAdjustmentAcks.push(id);
+                saveSync();
+              }
+              postAdjustmentApplied(id);
+            }
+            return;
+          }
+          var delta = Number(adj.delta);
+          if (!isFinite(delta)) delta = 0;
+          /* 先に適用＋id記録を保存してから確認POSTを送る（POST失敗時の二重適用を防ぐ） */
+          applyPointDelta(delta);
+          SYNC.appliedAdjustmentIds.push(id);
+          if (SYNC.pendingAdjustmentAcks.indexOf(id) < 0) SYNC.pendingAdjustmentAcks.push(id);
+          SYNC.pendingAdjustedSync = true;
+          saveSync();
+          newlyApplied++;
+          batchDelta += delta;
+          postAdjustmentApplied(id);
+        });
+        if (newlyApplied > 0) {
+          SYNC.lastAdjustmentNote = (batchDelta > 0 ? "+" + batchDelta : String(batchDelta)) + " P";
+          saveSync();
+          /* 静かに反映：ポップアップは出さず、表示中の数字だけ更新する */
+          try { renderHome(); } catch (eH) {}
+          try {
+            var pb = $("padjust-balance"); if (pb) pb.textContent = S.points;
+            var pt = $("padjust-total"); if (pt) pt.textContent = S.totalEarned;
+            var pp = $("parent-points"); if (pp) pp.textContent = S.points;
+            var pl = $("parent-level"); if (pl) pl.textContent = "Lv." + levelOf(S.totalEarned) + "（累計 " + S.totalEarned + " P）";
+          } catch (eP) {}
+          try { updateSyncStatusLine(); } catch (eS) {}
+          /* 適用後の最初の進捗同期には adjusted:true が付く（sendProgress 内で処理） */
+          try { sendProgress(); } catch (eSP) {}
+        }
+        return newlyApplied > 0;
+      });
+    }
     function postReport(id) {
       id = String(id);
-      return relayPost({ token: TOKEN, action: "quest_report", id: id }).then(function (data) {
+      return relayPost({ token: TOKEN, action: "quest_report", child: CHILD, id: id }).then(function (data) {
         if (data && data.ok === true) {
           var ix = SYNC.pendingReports.indexOf(id);
           if (ix >= 0) { SYNC.pendingReports.splice(ix, 1); saveSync(); }
@@ -3178,6 +3321,7 @@
     function syncCycle() {
       try { sendProgress(); } catch (e) {}
       try { fetchQuests(); } catch (e) {}
+      try { fetchAdjustments(); } catch (e) {}
     }
     function startSync() {
       try { $("quest-mascot").src = MASCOT_SMILE; } catch (e) {}
