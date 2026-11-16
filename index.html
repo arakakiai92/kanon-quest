@@ -2825,6 +2825,17 @@
       if (!Array.isArray(SYNC.seenActiveQuestIds)) SYNC.seenActiveQuestIds = [];
       if (typeof SYNC.lastSyncAt !== "number") SYNC.lastSyncAt = 0;
       if (!SYNC.questHistory || typeof SYNC.questHistory !== "object" || Array.isArray(SYNC.questHistory)) SYNC.questHistory = {};
+      /* claim ゲート用マイグレーション（旧セーブ）：selfReported フィールドが無い
+         旧エントリは、自己報告由来かどうか判別できない。読み込み時点で「確認待ち」
+         だったものと報告POST送信中（pendingReports）のものは、この端末が報告した
+         可能性が最も高いため自己報告として固定する。以後のエントリは upsert が
+         必ず真偽値で書くので、サーバー由来の「確認待ち」とは区別できる。 */
+      Object.keys(SYNC.questHistory).forEach(function (qid) {
+        var qe = SYNC.questHistory[qid];
+        if (qe && typeof qe.selfReported === "undefined") {
+          qe.selfReported = (qe.status === "reported" || SYNC.pendingReports.indexOf(qid) >= 0);
+        }
+      });
       /* ダッシュボード起点のポイント調整（予約式）用。旧セーブには無いキーなので
          ここで補完する（kanon_quest_v1 本体の形式は変更しない）。 */
       if (!Array.isArray(SYNC.appliedAdjustmentIds)) SYNC.appliedAdjustmentIds = [];
@@ -3003,6 +3014,9 @@
         status: status || (prev ? prev.status : "active"),
         /* 'both' クエストかどうか。未指定なら前回の値を引き継ぐ（旧エントリは false 扱い） */
         both: (typeof both === "boolean") ? both : !!(prev && prev.both),
+        /* この端末自身が「できた！」報告（quest_report）を送ったか。claim ゲートの判定キー。
+           upsert では前回の値を引き継ぐ（サーバー状態の書き込みで消さない）。 */
+        selfReported: !!(prev && prev.selfReported),
         firstSeenAt: prev && typeof prev.firstSeenAt === "number" ? prev.firstSeenAt : now,
         updatedAt: now
       };
@@ -3011,6 +3025,19 @@
       if (prev && (prev.status === "sibling") && entry.status !== "sibling") entry.status = "sibling";
       h[id] = entry;
       return entry;
+    }
+    /* claim ゲート：この端末自身が報告したクエストかどうかを、端末側の報告経路で
+       立った状態だけで判定する（サーバーが返した status はキーにしない＝別プロファイルが
+       報告・承認されただけでは開かない）。判定キーのいずれかで「自分が報告した」扱い：
+       - 履歴エントリの selfReported フラグ（reportQuest／postReport 成功時にだけ立つ。
+         旧セーブの確認待ちエントリは読み込み時マイグレーションでこのフラグに固定済み）
+       - SYNC.pendingReports に id がある（この端末が報告POSTを送信済み・サーバー未確定） */
+    function questIsSelfReported(id, prev) {
+      id = String(id);
+      if (SYNC.pendingReports && SYNC.pendingReports.indexOf(id) >= 0) return true;
+      var e = prev || questHistoryEnsure()[id];
+      if (!e) return false;
+      return e.selfReported === true;
     }
     function questHistoryMarkDone(id, title, points) {
       var entry = questHistoryUpsert(id, title, points, "done");
@@ -3030,7 +3057,23 @@
         var status = eff || String(q.status || "active");
         if (SYNC.claimedQuestIds.indexOf(id) >= 0) status = "done";
         else if (prev && prev.status === "done") status = "done";
-        questHistoryUpsert(id, q.title, q.points, status, q.child === "both");
+        /* claim ゲート（履歴側・reported）：サーバー由来の "reported"（別プロファイルの報告）を
+           この端末の履歴の「確認待ち」に昇格させない。自分が報告していないものは
+           既存エントリの状態（無ければ active）のままにする。さもないと承認後の取得で
+           ゲートが誤って開く。 */
+        if (status === "reported" && !questIsSelfReported(id, prev)) {
+          status = (prev && prev.status && prev.status !== "reported") ? prev.status : "active";
+        }
+        /* claim ゲート（履歴側）：自分が報告していない approved は履歴に書き込まない。
+           - 履歴に無い初見の approved → エントリ自体を作らない（報告した端末が claim する）。
+           - active で見ていた未報告の approved → 既存エントリには触らない
+             （取り消し/クリア と誤記録しないため。seen には入っているので消滅扱いにもならない）。 */
+        if (status === "approved" && !questIsSelfReported(id, prev)) return;
+        var entry = questHistoryUpsert(id, q.title, q.points, status, q.child === "both");
+        /* pendingReports 経由で開いたゲートは selfReported フラグとして固定しておく。
+           次回取得で status が approved に進んでもゲートが開いたままになり、
+           claim POST が失敗した回の再試行でも claim できる。 */
+        if (entry && status === "approved" && !entry.selfReported && questIsSelfReported(id, prev)) entry.selfReported = true;
       });
       /* 以前 active/reported/approved で見ていたのに今回の取得から消えたもの → 原則 取り消し（claim済みは done のまま）。
          ただし 'both' クエストを自分が報告しないまま消えた場合は、きょうだいが先に完了したものとして sibling にする。
@@ -3116,6 +3159,8 @@
     function claimQuest(q) {
       if (!q || q.id == null) return;
       var id = String(q.id);
+      /* claim ゲート（最終防衛線）：この端末が報告していないクエストは claim しない */
+      if (!questIsSelfReported(id)) return;
       if (SYNC.claimedQuestIds.indexOf(id) >= 0) return;
       if (claimInFlight[id]) return;
       claimInFlight[id] = true;
@@ -3149,8 +3194,10 @@
       });
       if (SYNC.pendingReports.length !== before) saveSync();
       renderQuestChip();
+      /* claim ゲート：承認済みでも、この端末自身が報告した（履歴が確認待ちだった）
+         クエストだけを claim する。報告していない端末はポイント付与も履歴記録もしない。 */
       questsCache.forEach(function (q) {
-        if (q.status === "approved") claimQuest(q);
+        if (q.status === "approved" && questIsSelfReported(q.id)) claimQuest(q);
       });
       maybeShowQuestPopups();
     }
@@ -3274,7 +3321,7 @@
           if (ix >= 0) { SYNC.pendingReports.splice(ix, 1); saveSync(); }
           var q = findQuest(id);
           if (q && q.status === "active") q.status = "reported";
-          try { if (q) { questHistoryUpsert(id, q.title, q.points, "reported"); saveSync(); } } catch (eH) {}
+          try { if (q) { var entR = questHistoryUpsert(id, q.title, q.points, "reported"); if (entR) entR.selfReported = true; saveSync(); } } catch (eH) {}
           renderQuestChip();
           return true;
         }
@@ -3287,7 +3334,7 @@
         SYNC.pendingReports.push(id);
         saveSync();
       }
-      try { var qr = findQuest(id); if (qr) { questHistoryUpsert(id, qr.title, qr.points, "reported"); saveSync(); } } catch (eH) {}
+      try { var qr = findQuest(id); if (qr) { var entQ = questHistoryUpsert(id, qr.title, qr.points, "reported"); if (entQ) entQ.selfReported = true; saveSync(); } } catch (eH) {}
       renderQuestChip();   /* 楽観表示：チップはすぐ報告済みになる */
       if (questPopupId === id) closeQuestPopup();
       postReport(id);
