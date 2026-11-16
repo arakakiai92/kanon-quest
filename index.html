@@ -1642,7 +1642,8 @@
         startTime: Date.now(), lock: false,
         showDanMap: !!cfg.showDanMap, extraLabel: cfg.extraLabel || null,
         conquerDan: cfg.conquerDan != null ? cfg.conquerDan : null,
-        onAgain: cfg.onAgain || null, missHtml: cfg.missHtml || null, missTitle: cfg.missTitle || null
+        onAgain: cfg.onAgain || null, missHtml: cfg.missHtml || null, missTitle: cfg.missTitle || null,
+        getRetry: cfg.getRetry || null, isRetry: !!cfg.isRetry
       };
       showScreen("scr-quiz");
       renderQuestion();
@@ -1729,13 +1730,22 @@
       if (quiz.idx >= quiz.questions.length) {
         var sec = (Date.now() - quiz.startTime) / 1000;
         var q2 = quiz; quiz = null;
+        /* まちがえた問題の再挑戦：セッション終了時点で getRetry() を評価し、
+           結果画面の「まちがえた ○もんを もう一度やる」ボタンへ渡す。
+           getRetry を渡さないモード（算数・英単語）は従来どおりボタン非表示。 */
+        var retryInfo = null;
+        try { retryInfo = typeof q2.getRetry === "function" ? q2.getRetry() : null; } catch (eR) { retryInfo = null; }
+        var hasRetry = !!(retryInfo && retryInfo.count > 0 && typeof retryInfo.onRetry === "function");
         finishSession({
           mode: q2.mode, label: q2.label, correct: q2.firstCorrect, total: q2.questions.length,
           points: q2.earned, sec: sec, showDanMap: q2.showDanMap,
           conquerDan: q2.conquerDan != null ? q2.conquerDan : null,
           extraNum: fmtTime(sec), extraLabel: "タイム（目安）",
           missHtml: typeof q2.missHtml === "function" ? q2.missHtml() : q2.missHtml,
-          missTitle: q2.missTitle, onAgain: q2.onAgain
+          missTitle: q2.missTitle, onAgain: q2.onAgain,
+          retryCount: hasRetry ? retryInfo.count : 0,
+          onRetry: hasRetry ? retryInfo.onRetry : null,
+          titleText: (q2.isRetry && !hasRetry) ? "まちがえた もんだい、ぜんぶ できた！すごい！" : undefined
         });
       } else renderQuestion();
     }
@@ -2191,7 +2201,7 @@
     });
 
     /* ================= kuku ================= */
-    function kukuQ(a, b) {
+    function kukuQ(a, b, missed) {
       var key = a + "×" + b;
       return {
         type: "num", text: a + " × " + b + " =", answer: a * b, answerLabel: String(a * b),
@@ -2199,6 +2209,13 @@
           var st = S.kukuStats[a] || (S.kukuStats[a] = { asked: 0, correct: 0 });
           st.asked++;
           if (first) st.correct++;
+          /* セッション内で1回でもまちがえた問題（2回目で正解したものを含む）を
+             結果画面の再挑戦用に集める。同じ問題が複数回出ても1件にまとめる。 */
+          if (!first && missed) {
+            var dup = false;
+            for (var mi = 0; mi < missed.length; mi++) { if (missed[mi][0] === a && missed[mi][1] === b) { dup = true; break; } }
+            if (!dup) missed.push([a, b]);
+          }
           if (eventual) {
             var mk = S.kukuMistakes[key];
             if (mk) { mk.count--; if (mk.count <= 0) delete S.kukuMistakes[key]; }
@@ -2231,25 +2248,58 @@
       }
       return out;
     }
+    /* 九九セッション共通設定：結果画面に「まちがえた もんだい」の一覧と、
+       まちがえた問題だけの再挑戦ボタン（#result-retry）を出す。
+       missed はセッション中に kukuQ の onResult が積む [a,b] の配列で、
+       終了時点で getRetry() がスナップショットを取って再挑戦へ渡す。
+       再挑戦セッション自体も同じ設定を使うので、そこでまたまちがえても
+       さらに再挑戦できる（全問1回で正解したら称賛タイトルになる）。 */
+    function kukuSessionCfg(label, qs, missed, opts) {
+      opts = opts || {};
+      return {
+        mode: "kuku", label: label, points: scaledPoints(POINTS_FLAT), questions: qs,
+        showDanMap: true,
+        conquerDan: opts.conquerDan != null ? opts.conquerDan : null,
+        onAgain: opts.onAgain || null,
+        isRetry: !!opts.isRetry,
+        missTitle: "まちがえた もんだい",
+        missHtml: function () {
+          if (!missed.length) return null;
+          return missed.map(function (p) { return esc(p[0] + "×" + p[1] + " = " + (p[0] * p[1])); }).join("<br>");
+        },
+        getRetry: function () {
+          if (!missed.length) return null;
+          var snapshot = missed.map(function (p) { return [p[0], p[1]]; });
+          return { count: snapshot.length, onRetry: function () { startKukuRetry(snapshot); } };
+        }
+      };
+    }
+    function startKukuRetry(pairs) {
+      if (!pairs || !pairs.length) return;
+      var missed = [];
+      var qs = shuffle(pairs.map(function (p) { return [p[0], p[1]]; })).map(function (p) { return kukuQ(p[0], p[1], missed); });
+      startQuiz(kukuSessionCfg("九九 まちがえた もんだい もう一度", qs, missed, {
+        isRetry: true,
+        onAgain: function () { startKukuRetry(pairs); }
+      }));
+    }
     function startKukuRandom() {
       var totalQ = questionCount();
       var pairs = [];
       for (var a = 2; a <= 9; a++) for (var b = 2; b <= 9; b++) pairs.push([a, b]);
       var dealt = kukuDeckDeal(pairs, totalQ);
-      var qs = dealt.map(function (p) { return kukuQ(p[0], p[1]); });
-      startQuiz({
-        mode: "kuku", label: "九九 ランダムテスト", points: scaledPoints(POINTS_FLAT), questions: qs,
-        showDanMap: true, onAgain: startKukuRandom
-      });
+      var missed = [];
+      var qs = dealt.map(function (p) { return kukuQ(p[0], p[1], missed); });
+      startQuiz(kukuSessionCfg("九九 ランダムテスト", qs, missed, { onAgain: startKukuRandom }));
     }
     function startKukuDan(dan) {
       var totalQ = questionCount();
       var dealt = kukuDeckDeal([2, 3, 4, 5, 6, 7, 8, 9], totalQ);
-      var qs = dealt.map(function (b) { return kukuQ(dan, b); });
-      startQuiz({
-        mode: "kuku", label: "九九 " + dan + "の だん", points: scaledPoints(POINTS_FLAT), questions: qs,
-        showDanMap: true, conquerDan: dan, onAgain: function () { startKukuDan(dan); }
-      });
+      var missed = [];
+      var qs = dealt.map(function (b) { return kukuQ(dan, b, missed); });
+      startQuiz(kukuSessionCfg("九九 " + dan + "の だん", qs, missed, {
+        conquerDan: dan, onAgain: function () { startKukuDan(dan); }
+      }));
     }
     function startKukuReview() {
       var keys = Object.keys(S.kukuMistakes);
@@ -2259,12 +2309,10 @@
       }
       var pool = shuffle(keys.map(function (k) { var m = S.kukuMistakes[k]; return [m.a, m.b]; }));
       var qs = [];
+      var missed = [];
       var totalQ = questionCount();
-      for (var i = 0; i < totalQ; i++) { var p = pool[i % pool.length]; qs.push(kukuQ(p[0], p[1])); }
-      startQuiz({
-        mode: "kuku", label: "九九 にがてふくしゅう", points: scaledPoints(POINTS_FLAT), questions: qs,
-        showDanMap: true, onAgain: startKukuReview
-      });
+      for (var i = 0; i < totalQ; i++) { var p = pool[i % pool.length]; qs.push(kukuQ(p[0], p[1], missed)); }
+      startQuiz(kukuSessionCfg("九九 にがてふくしゅう", qs, missed, { onAgain: startKukuReview }));
     }
     document.querySelectorAll("[data-kuku-mode]").forEach(function (btn) {
       btn.addEventListener("click", function () {
