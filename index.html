@@ -688,7 +688,7 @@
         </button>
         <button class="big-choice" data-arith-diff="hard">
           <div class="bc-title">むずかしい <span style="color:var(--coral);"><span id="arith-pts-hard">8</span>P</span></div>
-          <div class="bc-sub">くり上がり（2けた＋2けた）／くり下がり（2けた−2けた）／むずかしい とけい</div>
+          <div class="bc-sub">くり上がり（2けた＋2けた）／くり下がり（2けた−2けた）／かけざんの ひっさん（2けた×1けた・3けた×1けた）／むずかしい とけい</div>
         </button>
         </div>
       </section>
@@ -2078,7 +2078,7 @@
             { w: 5, f: function () { return calcQ(genSubBorrow2(), "-"); } },
             { w: 3, f: function () { return calcQ(genSubNoBorrow(true), "-"); } }
           ];
-          else groups = [{ w: 1, f: function () { return hissanQ(Math.random() < 0.5 ? genHissan31() : genHissan22(), missedHissan); } }];
+          else groups = [{ w: 1, f: function () { return hissanQ(Math.random() < 0.5 ? genHissan31() : genHissan21(), missedHissan); } }];
         }
         var gc = proportionalCounts(groups.map(function (g) { return g.w; }), total);
         groups.forEach(function (g, gi) {
@@ -2111,13 +2111,14 @@
         for (i = 0; i < c[4]; i++) plan.push(function () { return numberQ(1); });
         for (i = 0; i < c[5]; i++) plan.push(function () { return hissanQ(genHissan21(), missedHissan); });
       } else {
-        c = scaledCounts([5, 5, 3, 2, 2], total);
+        c = scaledCounts([5, 5, 3, 2, 2, 3], total);
         for (i = 0; i < c[0]; i++) plan.push(function () { return calcQ(genAddCarry2(), "+"); });
         for (i = 0; i < c[1]; i++) plan.push(function () { return calcQ(genSubBorrow2(), "-"); });
         for (i = 0; i < c[2]; i++) plan.push(function () { return calcQ(genSubNoBorrow(true), "-"); });
         for (i = 0; i < c[3]; i++) plan.push(function () { return clockQ(2); });
         for (i = 0; i < c[4]; i++) plan.push(function () { return numberQ(1); });
-        /* むずかしいの ひっさんは 2026-11-20 に取り下げ（保留）。配分は他のカテゴリへ比例配分される */
+        for (i = 0; i < c[5]; i++) plan.push(function () { return hissanQ(Math.random() < 0.5 ? genHissan31() : genHissan21(), missedHissan); });
+        /* むずかしいの ひっさんは ×1けた（2けた・3けた）のみ。2けた×2けたは 2026-11-20 に取り下げ（保留） */
       }
       /* カテゴリ配分とシャッフル順はそのままに、セッション内で
          同一シグネチャが重複したら同じカテゴリの生成関数で引き直す。
@@ -2162,8 +2163,8 @@
       hard: {
         add: "くり上がり（2けた＋2けた）の たしざんだけ でるよ",
         sub: "くり下がり（2けた−2けた など）の ひきざんだけ でるよ",
-        mul: "かけざんの ひっさん（3けた×1けた・2けた×2けた）だけ でるよ",
-        mix: "たしざん・ひきざん・とけい・かずが まざって でるよ（いままで通り）"
+        mul: "かけざんの ひっさん（2けた×1けた・3けた×1けた）だけ でるよ",
+        mix: "たしざん・ひきざん・とけい・かず・ひっさんが まざって でるよ（いままで通り）"
       }
     };
     function startArith(diff, op) {
@@ -2192,9 +2193,6 @@
         $("arith-op-sub-sub").textContent = subs.sub;
         $("arith-op-sub-mul").textContent = subs.mul;
         $("arith-op-sub-mix").textContent = subs.mix;
-        /* むずかしいでは かけざん（ひっさん）を取り下げ中のため選択肢を隠す（2026-11-20） */
-        var mulBtn = document.querySelector('[data-arith-op="mul"]');
-        if (mulBtn) mulBtn.style.display = (pendingArithDiff === "hard") ? "none" : "";
         refreshQuestionCountLabels();
         showScreen("scr-arith-op");
       });
