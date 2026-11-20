@@ -49,7 +49,9 @@
         color:var(--ink);
         height:100dvh;max-height:100dvh;
       }
-      #app{max-width:540px;margin:0 auto;height:100%;height:100dvh;display:flex;flex-direction:column;padding:10px 12px calc(104px + env(safe-area-inset-bottom,0px));}
+      #app{max-width:540px;margin:0 auto;height:100%;height:100dvh;display:flex;flex-direction:column;padding:10px 12px calc(14px + env(safe-area-inset-bottom,0px));}
+      /* 以前は下部に 104px の固定余白があったが、そこを使う要素は現行UIに無く
+         全画面で無駄な空白になっていたため縮小（2026-11-20 アイ指摘） */
       .scroll-pane{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:none;}
       .scroll-pane::-webkit-scrollbar{width:0;height:0;}
       button{font-family:inherit;cursor:pointer;border:none;color:inherit;}
