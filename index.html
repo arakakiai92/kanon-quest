@@ -42,7 +42,7 @@
         }
       }
       *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-      html,body{margin:0;padding:0;height:100%;height:100dvh;overflow:hidden;overscroll-behavior:none;}
+      html,body{margin:0;padding:0;height:100%;height:100dvh;}
       body{
         font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif;
         background:var(--paper);
@@ -684,7 +684,7 @@
         </button>
         <button class="big-choice" data-arith-diff="hard">
           <div class="bc-title">むずかしい <span style="color:var(--coral);"><span id="arith-pts-hard">8</span>P</span></div>
-          <div class="bc-sub">くり上がり（2けた＋2けた）／くり下がり（2けた−2けた）／かけざんの ひっさん（3けた×1けた・2けた×2けた）／むずかしい とけい</div>
+          <div class="bc-sub">くり上がり（2けた＋2けた）／くり下がり（2けた−2けた）／むずかしい とけい</div>
         </button>
         </div>
       </section>
@@ -1213,10 +1213,8 @@
       refreshQuestionCountLabels();
       if (id === "scr-kuku-setup") { renderDanMap($("setup-danmap")); $("kuku-review-sub").textContent = reviewCount() > 0 ? ("まちがえた もんだいが " + reviewCount() + "こ あるよ") : "まちがえた もんだいは まだ ないよ"; }
     }
-    /* 画面全体はスクロールさせない（内部ペインの中だけスクロール可） */
-    document.addEventListener("touchmove", function (e) {
-      if (!e.target.closest || !e.target.closest(".scroll-pane, #result-miss-list")) e.preventDefault();
-    }, { passive: false });
+    /* スクロールロックは解除済み（2026-11-20）：GitHub移設で右下のNetlifyマークが
+       出なくなったため、画面全体のスクロールを許可する。内部ペインは従来どおり。 */
     document.addEventListener("click", function (e) {
       var t = e.target.closest("[data-goto]");
       if (t) { showScreen(t.getAttribute("data-goto")); }
@@ -2109,13 +2107,13 @@
         for (i = 0; i < c[4]; i++) plan.push(function () { return numberQ(1); });
         for (i = 0; i < c[5]; i++) plan.push(function () { return hissanQ(genHissan21(), missedHissan); });
       } else {
-        c = scaledCounts([5, 5, 3, 2, 2, 3], total);
+        c = scaledCounts([5, 5, 3, 2, 2], total);
         for (i = 0; i < c[0]; i++) plan.push(function () { return calcQ(genAddCarry2(), "+"); });
         for (i = 0; i < c[1]; i++) plan.push(function () { return calcQ(genSubBorrow2(), "-"); });
         for (i = 0; i < c[2]; i++) plan.push(function () { return calcQ(genSubNoBorrow(true), "-"); });
         for (i = 0; i < c[3]; i++) plan.push(function () { return clockQ(2); });
         for (i = 0; i < c[4]; i++) plan.push(function () { return numberQ(1); });
-        for (i = 0; i < c[5]; i++) plan.push(function () { return hissanQ(Math.random() < 0.5 ? genHissan31() : genHissan22(), missedHissan); });
+        /* むずかしいの ひっさんは 2026-11-20 に取り下げ（保留）。配分は他のカテゴリへ比例配分される */
       }
       /* カテゴリ配分とシャッフル順はそのままに、セッション内で
          同一シグネチャが重複したら同じカテゴリの生成関数で引き直す。
@@ -2161,7 +2159,7 @@
         add: "くり上がり（2けた＋2けた）の たしざんだけ でるよ",
         sub: "くり下がり（2けた−2けた など）の ひきざんだけ でるよ",
         mul: "かけざんの ひっさん（3けた×1けた・2けた×2けた）だけ でるよ",
-        mix: "たしざん・ひきざん・とけい・かず・ひっさんが まざって でるよ（いままで通り）"
+        mix: "たしざん・ひきざん・とけい・かずが まざって でるよ（いままで通り）"
       }
     };
     function startArith(diff, op) {
@@ -2190,6 +2188,9 @@
         $("arith-op-sub-sub").textContent = subs.sub;
         $("arith-op-sub-mul").textContent = subs.mul;
         $("arith-op-sub-mix").textContent = subs.mix;
+        /* むずかしいでは かけざん（ひっさん）を取り下げ中のため選択肢を隠す（2026-11-20） */
+        var mulBtn = document.querySelector('[data-arith-op="mul"]');
+        if (mulBtn) mulBtn.style.display = (pendingArithDiff === "hard") ? "none" : "";
         refreshQuestionCountLabels();
         showScreen("scr-arith-op");
       });
