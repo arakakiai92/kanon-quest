@@ -477,6 +477,10 @@
       #scr-result .dan-cell .dan-count{display:none;}
       .eng-pane{padding:2px;}
       #scr-rewards .card-panel,#scr-parent .card-panel{flex:none;}
+      /* 保護者・ごほうび画面は画面全体を1つのスクローラーにする。内部ペインとの
+         二重スクロールは Android 端末でスクロールが効かないことがあったため、
+         ペイン側ははみ出し許可にして .screen.active 側でスクロールさせる（2026-11-20） */
+      #scr-parent .scroll-pane,#scr-rewards .scroll-pane{flex:none;overflow:visible;min-height:0;}
       .mode-card{overflow:hidden;}
       /* Shorter viewports: the hero never shrinks (flex:0 0 auto above) and the
          mode grid is the only flexible area, so hero text cannot spill over the
